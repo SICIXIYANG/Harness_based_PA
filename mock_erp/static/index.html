@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mock ERP 看板</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: #f3f5f9;
+    color: #1f2937;
+  }
+  header {
+    background: #1e3a5f;
+    color: #fff;
+    padding: 18px 28px;
+  }
+  header h1 { margin: 0 0 6px; font-size: 22px; }
+  header .hint { margin: 0; font-size: 14px; color: #cbd5e1; }
+  header .hint b.in { color: #7ee2a8; }
+  header .hint b.out { color: #ffb199; }
+
+  .wrap { padding: 20px 28px; max-width: 1200px; margin: 0 auto; }
+  .panel {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    padding: 18px 20px;
+    margin-bottom: 20px;
+  }
+  .panel h2 { margin: 0 0 14px; font-size: 16px; }
+
+  .form-row { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
+  .form-row label { display: flex; flex-direction: column; font-size: 13px; color: #475569; gap: 4px; }
+  .form-row input, .form-row select {
+    padding: 7px 10px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px;
+  }
+  #create-btn {
+    padding: 9px 18px; background: #2563eb; color: #fff; border: none;
+    border-radius: 6px; font-size: 14px; cursor: pointer;
+  }
+  #create-btn:hover { background: #1d4ed8; }
+
+  .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eef1f5; }
+  th { color: #64748b; font-weight: 600; background: #f8fafc; }
+  .num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr.low td { background: #fff1f0; }
+  tr.low td:last-child { color: #d92d20; font-weight: 600; }
+
+  .tag { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; }
+  .tag.p { background: #e6f7ec; color: #15803d; }
+  .tag.s { background: #fff0e6; color: #c2410c; }
+
+  .place-btn { border: none; border-radius: 6px; padding: 6px 10px; font-size: 12px; cursor: pointer; color: #fff; }
+  .place-btn.in { background: #16a34a; }
+  .place-btn.in:hover { background: #15803d; }
+  .place-btn.out { background: #ea580c; }
+  .place-btn.out:hover { background: #c2410c; }
+  .muted { color: #94a3b8; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Mock ERP 看板</h1>
+  <p class="hint">采购订单 = 入库（库存 <b class="in">+</b>） ｜ 销售订单 = 出库（库存 <b class="out">−</b>）</p>
+</header>
+
+<div class="wrap">
+  <section class="panel">
+    <h2>新建订单</h2>
+    <div class="form-row">
+      <label>物料
+        <select id="part-select"></select>
+      </label>
+      <label>数量
+        <input id="qty" type="number" min="1" value="1" />
+      </label>
+      <label>类型
+        <select id="type-select">
+          <option value="purchase">采购（入库 +）</option>
+          <option value="sale">销售（出库 −）</option>
+        </select>
+      </label>
+      <label>单价（留空用默认价）
+        <input id="price" type="number" step="0.01" placeholder="默认" />
+      </label>
+      <button id="create-btn">创建订单</button>
+    </div>
+  </section>
+
+  <div class="cols">
+    <section class="panel">
+      <h2>库存</h2>
+      <table id="inventory-table">
+        <thead><tr><th>编号</th><th>名称</th><th>单位</th><th>库存</th><th>预警阈值</th><th>状态</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+
+    <section class="panel">
+      <h2>订单</h2>
+      <table id="order-table">
+        <thead><tr><th>单号</th><th>类型</th><th>物料</th><th>数量</th><th>单价</th><th>状态</th><th>操作</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </div>
+</div>
+
+<script>
+  async function loadParts() {
+    const res = await fetch('/api/parts/search');
+    const parts = await res.json();
+    const sel = document.getElementById('part-select');
+    sel.innerHTML = '';
+    for (const p of parts) {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = `${p.id} ${p.name}（¥${p.price}/${p.unit}）`;
+      sel.appendChild(opt);
+    }
+  }
+
+  async function loadInventory() {
+    const res = await fetch('/api/inventory');
+    const rows = await res.json();
+    const tbody = document.querySelector('#inventory-table tbody');
+    tbody.innerHTML = '';
+    for (const r of rows) {
+      const tr = document.createElement('tr');
+      if (r.low_stock) tr.className = 'low';
+      tr.innerHTML =
+        `<td>${r.part_id}</td><td>${r.part_name}</td><td>${r.unit}</td>` +
+        `<td class="num">${r.quantity}</td><td class="num">${r.warning_threshold}</td>` +
+        `<td>${r.low_stock ? '低库存' : '正常'}</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  async function loadOrders() {
+    const res = await fetch('/api/orders');
+    const orders = await res.json();
+    const tbody = document.querySelector('#order-table tbody');
+    tbody.innerHTML = '';
+    for (const o of orders) {
+      const isPurchase = o.type !== 'sale';
+      const tr = document.createElement('tr');
+      const btn = o.status === 'placed'
+        ? '<span class="muted">已完成</span>'
+        : `<button class="place-btn ${isPurchase ? 'in' : 'out'}" data-id="${o.id}">` +
+          `${isPurchase ? '收货入库 +' : '发货出库 −'}</button>`;
+      tr.innerHTML =
+        `<td>${o.id}</td>` +
+        `<td><span class="tag ${isPurchase ? 'p' : 's'}">${isPurchase ? '采购' : '销售'}</span></td>` +
+        `<td>${o.part_name}</td><td class="num">${o.quantity}</td>` +
+        `<td class="num">¥${o.unit_price}</td><td>${o.status}</td><td>${btn}</td>`;
+      tbody.appendChild(tr);
+    }
+  }
+
+  async function refresh() {
+    await Promise.all([loadInventory(), loadOrders()]);
+  }
+
+  async function createOrder() {
+    const part_id = document.getElementById('part-select').value;
+    const quantity = parseInt(document.getElementById('qty').value, 10);
+    const order_type = document.getElementById('type-select').value;
+    const priceVal = document.getElementById('price').value;
+    const body = { part_id, quantity, order_type };
+    if (priceVal !== '') body.unit_price = parseFloat(priceVal);
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      alert('创建失败：' + (err.detail || res.statusText));
+      return;
+    }
+    await refresh();
+  }
+
+  async function placeOrder(id) {
+    const res = await fetch(`/api/orders/${id}/place`, { method: 'POST' });
+    if (!res.ok) {
+      const err = await res.json();
+      alert('下单失败：' + (err.detail || res.statusText));
+      return;
+    }
+    await refresh();
+  }
+
+  document.getElementById('create-btn').addEventListener('click', createOrder);
+  document.getElementById('order-table').addEventListener('click', (e) => {
+    const btn = e.target.closest('.place-btn');
+    if (btn) placeOrder(btn.dataset.id);
+  });
+
+  (async function init() {
+    await loadParts();
+    await refresh();
+  })();
+</script>
+</body>
+</html>
