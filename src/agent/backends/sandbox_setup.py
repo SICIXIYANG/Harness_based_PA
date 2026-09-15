@@ -29,7 +29,24 @@ def create_sandbox(name: str | None = None) -> DockerSandbox:
     )
     # 初始化工作目录
     container.exec_run("mkdir -p /workspace")
+    _ensure_chart_env(container)
     return DockerSandbox(container)
+
+
+def _ensure_chart_env(container) -> None:
+    """安装 matplotlib 与中文字体（供 make_chart 画图用），已装则跳过。"""
+    if container.exec_run("python -c 'import matplotlib'").exit_code != 0:
+        container.exec_run("pip install --no-cache-dir --quiet matplotlib")
+    # 无 CJK 字体时中文标签会渲染成方块
+    has_cjk = container.exec_run(
+        "python -c 'import matplotlib.font_manager as fm; "
+        "exit(0 if any(\"CJK\" in f.name for f in fm.fontManager.ttflist) else 1)'"
+    )
+    if has_cjk.exit_code != 0:
+        container.exec_run(
+            "apt-get update -qq && apt-get install -y -qq "
+            "--no-install-recommends fonts-noto-cjk"
+        )
 
 
 def connect_sandbox(name: str) -> DockerSandbox | None:

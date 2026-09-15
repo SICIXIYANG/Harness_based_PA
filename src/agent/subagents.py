@@ -69,7 +69,8 @@ def build_subagents(tools: list[BaseTool]) -> list[dict]:
                 "part_by_supplier / supplier_query 等 ERP 只读工具查出现有供应商的报价、"
                 "评级、物料价格，作为对比基准；"
                 "2) 用 web_search 搜索候选商品/供应商/行情，必要时用 web_fetch 抓取详情页；"
-                "3) 按价格、质量、品牌、供货等维度做对比，给出明确推荐及理由；"
+                "3) 按价格、质量、品牌、供货等维度做对比，把关键数据（各供应商价格、评分等）"
+                "用 make_chart 生成柱状图/饼图，把返回的引用行插入报告，给出明确推荐及理由；"
                 "4) 用 write_file 把报告保存到 /workspace/reports/report_{时间戳}.md，"
                 "并返回报告的保存路径与核心结论。"
                 "5) 物料编号（如 P002）是内部编码，若任务里只有编号而没有名称/规格，"
@@ -78,7 +79,7 @@ def build_subagents(tools: list[BaseTool]) -> list[dict]:
                 "绝不编造价格、品牌或供应商信息。"
             ),
             "tools": _pick(
-                tools, "web_search", "web_fetch", *_RESEARCHER_ERP_TOOL_NAMES
+                tools, "web_search", "web_fetch", "make_chart", *_RESEARCHER_ERP_TOOL_NAMES
             ),
             "skills": ["/skills/research/"],
         },

@@ -26,6 +26,7 @@ from .middlewares.sandbox_health import SandboxHealthMiddleware
 from .middlewares.skills_sync import SkillsSyncMiddleware
 from .middlewares.user_skills_restore import UserSkillsRestoreMiddleware
 from .subagents import build_subagents
+from .tools.chart_tool import build_make_chart_tool
 from .tools.hitl_tools import request_order_info
 from .tools.mcp_client import load_mcp_tools
 from .tools.skill_install_tools import build_install_skill_tool
@@ -85,6 +86,7 @@ async def create_main_agent(checkpointer=None):
     tools.extend([web_search, web_fetch])
     sandbox_manager = SandboxManager()
     tools.append(build_install_skill_tool(llm, sandbox_manager, "default_user"))
+    tools.append(build_make_chart_tool(sandbox_manager, "default_user"))
     sandbox = sandbox_manager.get_sandbox("default_user")
     backend = build_backend(sandbox)
     agent = create_deep_agent(
